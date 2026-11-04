@@ -42,12 +42,27 @@ try{
  const originalDelete=env.PDF_STORAGE.delete;let deletes=0;env.PDF_STORAGE.delete=async key=>{if(++deletes===3)throw Error('simulated storage failure');return originalDelete(key);};
  assert.equal((await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제'}})).status,500);
  assert.equal((await request(api('admin/editions/2026-01/restore'),{method:'POST',data:{}})).status,409);
+ assert.equal((await request(api('admin/editions'),{method:'POST',data:edition})).status,409);
  env.PDF_STORAGE.delete=originalDelete;
  let purgeResult;do{r=await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제'}});assert.equal(r.status,200);purgeResult=await r.json();}while(!purgeResult.done);
  assert.equal(values.size,0);assert.equal(sql.prepare('SELECT COUNT(*) AS count FROM prism_versions').get().count,0);
  assert.equal((await (await request(api('admin/trash'))).json()).editions.length,0);
  assert.equal((await (await request('/editions.json',{auth:false})).json()).removedIssueIds.includes('2026-01'),true);
  assert.equal((await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제'}})).status,200);
- assert.equal((await request(api('admin/editions/2026-01/restore'),{method:'POST',data:{}})).status,409);
- console.log('PASS: full KV Worker API, '+pdf.length+' bytes verified; purge authorization/confirmation, live-edition protection, failure/resume, physical KV deletion, metadata removal, permanent QR tombstone and restore prevention (SQLite/KV test adapters).');
+ assert.equal((await request(api('admin/editions/2026-01/restore'),{method:'POST',data:{}})).status,404);
+ assert.equal(sql.prepare('SELECT COUNT(*) AS count FROM prism_editions').get().count,0);
+ assert.equal(sql.prepare('SELECT COUNT(*) AS count FROM prism_upload_parts').get().count,0);
+ assert.equal((await request(api('admin/editions'),{method:'POST',data:edition})).status,201);
+ assert.equal((await (await request('/editions.json',{auth:false})).json()).removedIssueIds.includes('2026-01'),false);
+ assert.equal((await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제',expectedCreatedAt:'old-generation'}})).status,409);
+ assert.equal(sql.prepare('SELECT published FROM prism_editions WHERE id=?').get('2026-01').published,0);
+ assert.equal((await request(api('admin/editions/2026-01/trash'),{method:'POST',data:{}})).status,200);
+ assert.equal((await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제'}})).status,200);
+ assert.equal(sql.prepare("SELECT COUNT(*) AS count FROM prism_audit WHERE action='purge'").get().count,2);
+ assert.equal(sql.prepare('SELECT COUNT(*) AS count FROM prism_editions').get().count,0);
+ // Completed tombstones from the previous deployment are cleaned on startup.
+ const t=new Date().toISOString();sql.prepare('INSERT INTO prism_editions (id,year,title,label,created_at,updated_at,deleted_at,purged_at) VALUES (?,?,?,?,?,?,?,?)').run('legacy-id',2025,'legacy','legacy',t,t,t,t);
+ const freshEnv={...env,DB:{...db}};await worker.fetch(new Request(origin+'/editions.json'),freshEnv);
+ assert.equal(sql.prepare('SELECT COUNT(*) AS count FROM prism_editions').get().count,0);
+ console.log('PASS: '+pdf.length+' bytes verified; purge physically removes edition, versions and KV files; failed purge blocks reuse; completed IDs can be reused and purged again; stale requests cannot delete replacements; legacy tombstones are removed.');
 }finally{sql.close();}

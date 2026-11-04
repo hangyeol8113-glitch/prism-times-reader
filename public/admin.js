@@ -3,10 +3,10 @@ import * as pdfjs from './vendor/pdf.mjs';
 import {escapeHTML as esc,qrSVG} from './common.js';
 pdfjs.GlobalWorkerOptions.workerSrc='/vendor/pdf.worker.mjs';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-let editions=[],trashed=[],defaultIssue='',view='dashboard',toastTimer,purgeIds=[];
+let editions=[],trashed=[],defaultIssue='',view='dashboard',toastTimer,purgeIds=[],purgeGenerations=new Map();
 const size=n=>n>=1048576?(n/1048576).toFixed(1)+' MB':Math.ceil(n/1024)+' KB';
 const date=d=>new Date(d).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
-function notify(message){$('#toast').textContent=message;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),4500);}
+function notify(message){const box=$('#toast');box.textContent=message;clearTimeout(toastTimer);if(box.matches(':popover-open'))box.hidePopover();box.showPopover();box.classList.add('show');toastTimer=setTimeout(()=>{box.classList.remove('show');if(box.matches(':popover-open'))box.hidePopover();},6500);}
 function showLogin(){for(const d of $$('dialog[open]'))d.close();$('#admin-app').hidden=true;$('#login-screen').hidden=false;$('#login-password').value='';}
 async function api(path,options={}){const method=options.method||'GET';const r=await fetch('/api/prism/'+path,{credentials:'same-origin',...options,headers:{...(method==='GET'?{}:{'Content-Type':'application/json','X-Prism-Admin':'1'}),...options.headers}});let data;try{data=await r.json();}catch{throw Error('서버 응답을 읽을 수 없습니다. 다시 시도해 주세요.');}if(!r.ok){if(r.status===401&&path!=='login')showLogin();throw Error(data.error||'요청을 처리하지 못했습니다.');}return data;}
 const post=(path,data)=>api(path,{method:'POST',body:JSON.stringify(data)});
@@ -82,13 +82,13 @@ $('#backup-download').addEventListener('click',e=>busy(e.currentTarget,async()=>
 for(const dialog of $$('dialog'))dialog.addEventListener('cancel',e=>{if(dialog.id==='editor-dialog'&&$('#edition-submit').disabled)e.preventDefault();});
 try{const s=await api('session');if(s.authenticated){await load();$('#login-screen').hidden=true;$('#admin-app').hidden=false;await switchView(location.hash.slice(1)||'dashboard');}}catch(e){$('#login-error').textContent=e.message;}
 
-function openPurge(ids){purgeIds=ids;$('#purge-confirmation').value='';$('#purge-progress').textContent='';const selected=trashed.filter(e=>ids.includes(e.id));$('#purge-description').textContent=selected.map(e=>e.label).join(', ')+' — 총 '+selected.length+'개 호의 파일을 삭제합니다.';$('#purge-dialog').showModal();}
+function openPurge(ids){purgeIds=ids;purgeGenerations=new Map(trashed.filter(e=>ids.includes(e.id)).map(e=>[e.id,e.created_at]));$('#purge-confirmation').value='';$('#purge-progress').textContent='';const selected=trashed.filter(e=>ids.includes(e.id));$('#purge-description').textContent=selected.map(e=>e.label).join(', ')+' — 총 '+selected.length+'개 호의 파일을 삭제합니다.';$('#purge-dialog').showModal();}
 $('#empty-trash').addEventListener('click',()=>openPurge(trashed.map(e=>e.id)));
 $('#purge-dialog').addEventListener('cancel',e=>{if($('#purge-form button[type=submit]').disabled)e.preventDefault();});
 $('#purge-form').addEventListener('submit',e=>{e.preventDefault();busy(e.submitter,async()=>{
  if($('#purge-confirmation').value!=='영구 삭제')throw Error('영구 삭제를 정확히 입력해 주세요.');
  let finished=0;
- try{for(const id of purgeIds){let result;do{result=await post('admin/editions/'+encodeURIComponent(id)+'/purge',{confirmation:'영구 삭제'});$('#purge-progress').textContent=(finished+1)+' / '+purgeIds.length+'개 호 처리 중'+(result.total?' · '+result.processed+'/'+result.total+'개 파일 조각':'');}while(!result.done);finished++;}
- $('#purge-dialog').close();await load();notify('선택한 신문의 PDF와 수정본을 영구 삭제했습니다.');
+ try{for(const id of purgeIds){let result;do{result=await post('admin/editions/'+encodeURIComponent(id)+'/purge',{confirmation:'영구 삭제',expectedCreatedAt:purgeGenerations.get(id)});$('#purge-progress').textContent=(finished+1)+' / '+purgeIds.length+'개 호 처리 중'+(result.total?' · '+result.processed+'/'+result.total+'개 파일 조각':'');}while(!result.done);finished++;}
+ $('#purge-dialog').close();await load();notify('PDF·수정본·신문 등록 정보를 영구 삭제했습니다. 같은 호 ID를 다시 사용할 수 있습니다.');
  }catch(error){await load().catch(()=>{});$('#purge-progress').textContent='작업이 중단됐습니다. 다시 실행하면 남은 파일부터 계속합니다. '+error.message;throw error;}
 });});
