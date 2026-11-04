@@ -1,5 +1,5 @@
 import * as pdfjs from './vendor/pdf.mjs';
-import {$,$$,notify,download,qrSVG,copyText,draftAction,escapeHTML} from './common.js';
+import {$,$$,notify,draftAction,escapeHTML} from './common.js';
 import {resolveRoute,pageLink} from './reader-core.js';
 pdfjs.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdf.worker.mjs',import.meta.url).href;
 const state={pdf:null,issue:null,config:null,count:0,page:1,flip:null,spread:false,draft:false,suppressFlip:false,turning:false,turnPhase:'read',mountVersion:0,navigationHistoryPush:null,pageSources:new Map(),rendered:new Map(),thumbs:new Map(),queue:Promise.resolve(),zoom:1};
@@ -39,8 +39,10 @@ async function boot(){
   }catch(error){console.error(error);fail('신문을 불러오지 못했습니다','PDF 파일을 읽을 수 없습니다. 파일 경로와 네트워크 연결을 확인한 뒤 다시 열어 주세요.');}
 }
 function getBookSize(){
-  const room=$('#reading-room');const isMobile=innerWidth<760;const availableHeight=room.clientHeight-(isMobile?8:62);const availableWidth=room.clientWidth-(isMobile?36:170);
-  const spread=state.spread&&!isMobile;const width=Math.floor(Math.min(availableHeight*bookRatio,availableWidth/(spread?2:1),600));
+  const room=$('#reading-room');const isMobile=innerWidth<760;const spread=state.spread&&!isMobile;
+  document.body.classList.toggle('spread-reading',spread);
+  const availableHeight=room.clientHeight-(isMobile?8:spread?16:62);const availableWidth=room.clientWidth-(isMobile?36:spread?104:170);
+  const width=Math.floor(Math.min(availableHeight*bookRatio,availableWidth/(spread?2:1),spread?Infinity:600));
   return{width:Math.max(100,width),height:Math.max(140,Math.floor(width/bookRatio)),spread};
 }
 async function mountBook(){
@@ -144,13 +146,6 @@ const thumbObserver=new IntersectionObserver(entries=>{for(const e of entries){i
 $('#contents').onclick=()=>{$('#contents-dialog').showModal();$$('.thumbnail-button').forEach(b=>thumbObserver.observe(b));};
 $$('.close-dialog').forEach(b=>b.onclick=()=>b.closest('dialog').close());
 $$('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}}));
-let currentQR='';
-$('#share').onclick=()=>{
-  if(state.draft){notify('미리보기는 공유할 수 없습니다. PDF를 먼저 게시해 주세요.');return;}
-  const url=pageLink(location.href,state.issue.id,state.page);$('#share-link').value=url;currentQR=qrSVG(url);$('#qr-preview').innerHTML=currentQR;$('#share-description').textContent=state.issue.label+' · '+state.page+'쪽부터 바로 열리는 링크입니다.';$('#qr-note').textContent=state.issue.isDemo?'예시 신문용 QR입니다. 실제 신문 인쇄에는 사용하지 마세요.':'인쇄할 때는 QR 주변의 흰 여백을 유지해 주세요.';$('#share-dialog').showModal();
-};
-$('#copy-link').onclick=async()=>{try{await copyText($('#share-link').value);notify('현재 쪽 링크를 복사했습니다.');}catch(e){notify(e.message);}};
-$('#download-qr').onclick=()=>download(new Blob([currentQR],{type:'image/svg+xml'}),'prism-'+state.issue.id+'-p'+String(state.page).padStart(2,'0')+'.svg');
 $('#fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else notify('이 브라우저에서는 전체 화면을 지원하지 않습니다.');}catch{notify('전체 화면을 열 수 없습니다.');}};
 async function renderZoom(){
   const canvas=$('#zoom-canvas');const pdfPage=await state.pdf.getPage(state.page);const vp=pdfPage.getViewport({scale:1});const viewport=pdfPage.getViewport({scale:Math.min(2500/vp.width,4)});canvas.width=Math.round(viewport.width);canvas.height=Math.round(viewport.height);await pdfPage.render({canvasContext:canvas.getContext('2d'),viewport}).promise;sizeZoom();
