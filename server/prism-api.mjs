@@ -1,3 +1,4 @@
+import {kvFiles,handleChunkUpload,FILE_CHUNK_BYTES} from './kv-files.mjs';
 import seed from '../data/seed-editions.json';
 import qrCode from 'qrcode-generator';
 import {zipSync,strToU8} from 'fflate';
@@ -15,8 +16,8 @@ export async function initialize(env){
  if(!env.DB||!env.BUCKET)problem('서버 저장소 설정을 확인해 주세요.',503);
  if(!initialized.has(env.DB))initialized.set(env.DB,(async()=>{
   const db=env.DB,t=now(),sql=[];
-  for(const e of seed.editions){const v='seed-'+e.id;sql.push(stmt(db,'INSERT OR IGNORE INTO prism_editions (id,year,title,label,language,is_demo,sample_notice,sections,current_version,published,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,1,?,?)',e.id,2026,e.title,e.label,e.language||'ko',e.isDemo?1:0,e.sampleNotice||null,JSON.stringify(e.sections||[]),v,t,t));sql.push(stmt(db,"INSERT OR IGNORE INTO prism_versions (id,edition_id,source_path,filename,size,page_count,status,created_at,published_at) VALUES (?,?,?,?,?,16,'ready',?,?)",v,e.id,e.pdf,e.pdf.split('/').pop(),e.id==='2026-preview'?168543:22709013,t,t));}
-  sql.push(stmt(db,'INSERT OR IGNORE INTO prism_settings (key,value) VALUES (?,?)','defaultIssue',seed.defaultIssue));await db.batch(sql);
+  for(const e of env.EMPTY_START==='true'?[]:seed.editions){const v='seed-'+e.id;sql.push(stmt(db,'INSERT OR IGNORE INTO prism_editions (id,year,title,label,language,is_demo,sample_notice,sections,current_version,published,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,1,?,?)',e.id,2026,e.title,e.label,e.language||'ko',e.isDemo?1:0,e.sampleNotice||null,JSON.stringify(e.sections||[]),v,t,t));sql.push(stmt(db,"INSERT OR IGNORE INTO prism_versions (id,edition_id,source_path,filename,size,page_count,status,created_at,published_at) VALUES (?,?,?,?,?,16,'ready',?,?)",v,e.id,e.pdf,e.pdf.split('/').pop(),e.id==='2026-preview'?168543:22709013,t,t));}
+  sql.push(stmt(db,'INSERT OR IGNORE INTO prism_settings (key,value) VALUES (?,?)','defaultIssue',env.EMPTY_START==='true'?'':seed.defaultIssue));await db.batch(sql);
  })().catch(e=>{initialized.delete(env.DB);throw e;}));return initialized.get(env.DB);
 }
 async function authRecord(env){let r=await first(env.DB,"SELECT value FROM prism_settings WHERE key='auth'");if(!r){if(!env.ADMIN_PASSWORD_HASH)problem('관리자 비밀번호가 아직 설정되지 않았습니다.',503);await stmt(env.DB,"INSERT OR IGNORE INTO prism_settings (key,value) VALUES ('auth',?)",JSON.stringify({hash:env.ADMIN_PASSWORD_HASH,epoch:1})).run();r=await first(env.DB,"SELECT value FROM prism_settings WHERE key='auth'");}return JSON.parse(r.value);}
@@ -24,9 +25,9 @@ async function authenticated(request,env){const token=sessionToken(request);if(!
 async function newSession(request,env,epoch){const token=randomToken();await stmt(env.DB,'INSERT INTO prism_sessions (token_hash,epoch,expires_at) VALUES (?,?,?)',await digest(token),epoch,Math.floor(Date.now()/1000)+SESSION_SECONDS).run();return sessionCookie(token,request);}
 const auditStmt=(db,action,id,detail)=>stmt(db,'INSERT INTO prism_audit (id,action,edition_id,detail,created_at) VALUES (?,?,?,?,?)',crypto.randomUUID(),action,id,detail,now());
 function issueConfig(e,v){return{id:e.id,title:e.title,label:e.label,language:e.language,isDemo:!!e.is_demo,sampleNotice:e.sample_notice||undefined,sections:JSON.parse(e.sections||'[]'),pdf:'/api/prism/files/'+v.id,pageCount:v.page_count};}
-export async function publicConfig(env){await initialize(env);const editions=await all(env.DB,'SELECT e.*,v.id AS version_id,v.page_count FROM prism_editions e JOIN prism_versions v ON v.id=e.current_version WHERE e.published=1 AND e.deleted_at IS NULL');const def=await first(env.DB,"SELECT value FROM prism_settings WHERE key='defaultIssue'");return{schemaVersion:1,publication:'PRISM-TIMES',defaultIssue:def?.value??'',removedIssueIds:(await all(env.DB,'SELECT id FROM prism_editions WHERE deleted_at IS NOT NULL AND published=1')).map(e=>e.id),editions:editions.map(e=>issueConfig(e,{id:e.version_id,page_count:e.page_count}))};}
+export async function publicConfig(env){if(env.PDF_STORAGE)env={...env,BUCKET:kvFiles(env)};await initialize(env);const editions=await all(env.DB,'SELECT e.*,v.id AS version_id,v.page_count FROM prism_editions e JOIN prism_versions v ON v.id=e.current_version WHERE e.published=1 AND e.deleted_at IS NULL');const def=await first(env.DB,"SELECT value FROM prism_settings WHERE key='defaultIssue'");return{schemaVersion:1,publication:'PRISM-TIMES',defaultIssue:def?.value??'',removedIssueIds:(await all(env.DB,'SELECT id FROM prism_editions WHERE deleted_at IS NOT NULL AND published=1')).map(e=>e.id),editions:editions.map(e=>issueConfig(e,{id:e.version_id,page_count:e.page_count}))};}
 export async function publicConfigResponse(env){try{return json(await publicConfig(env));}catch(e){console.error('Public configuration failed',e);return json({error:'신문 정보를 불러오지 못했습니다.'},503);}}
-function pageURL(request,issue,page){const u=new URL('/',request.url);u.searchParams.set('issue',issue);u.searchParams.set('page',String(page));return u.href;}
+function pageURL(request,issue,page,readerURL){const u=new URL(readerURL||'/',request.url);u.searchParams.set('issue',issue);u.searchParams.set('page',String(page));return u.href;}
 export function parseRange(value,size){if(!value)return null;const m=/^bytes=(\d*)-(\d*)$/.exec(value);if(!m||(!m[1]&&!m[2]))return false;let start,end;if(!m[1]){const n=Number(m[2]);if(!Number.isSafeInteger(n)||n<=0)return false;start=Math.max(0,size-n);end=size-1;}else{start=Number(m[1]);end=m[2]?Number(m[2]):size-1;}if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||start>=size||end<start)return false;end=Math.min(end,size-1);return{offset:start,length:end-start+1};}
 async function serveFile(request,env,id){const v=await first(env.DB,"SELECT v.*,e.deleted_at FROM prism_versions v JOIN prism_editions e ON e.id=v.edition_id WHERE v.id=? AND v.status='ready'",id);if(!v)problem('파일을 찾을 수 없습니다.',404);if(v.deleted_at){if(!await authenticated(request,env))problem('관리자가 삭제한 신문입니다.',410);}else if(!v.published_at&&!await authenticated(request,env))problem('관리자 로그인이 필요합니다.',401);
  if(v.source_path){const u=new URL('/'+v.source_path,request.url);return new Response(null,{status:302,headers:{Location:u.href,'Cache-Control':'no-store'}});}
@@ -37,6 +38,7 @@ async function serveFile(request,env,id){const v=await first(env.DB,"SELECT v.*,
  const object=await env.BUCKET.get(v.object_key,range?{range}:undefined);if(!object)problem('저장된 PDF를 찾을 수 없습니다.',404);headers.ETag=object.httpEtag;return new Response(object.body,{status:range?206:200,headers});
 }
 export async function handleAPI(request,env){try{
+ if(env.PDF_STORAGE)env={...env,BUCKET:kvFiles(env)};
  await initialize(env);const db=env.DB,u=new URL(request.url),path=u.pathname.replace(/^\/api\/prism\/?/,''),method=request.method;
  if(!['GET','HEAD','POST','PUT'].includes(method))problem('지원하지 않는 요청입니다.',405);
  if(['POST','PUT'].includes(method)&&!validMutation(request))problem('요청 출처를 확인할 수 없습니다. 관리자 화면에서 다시 시도해 주세요.',403);
@@ -52,6 +54,7 @@ export async function handleAPI(request,env){try{
  if(path==='logout'&&method==='POST'){const token=sessionToken(request);if(token)await stmt(db,'DELETE FROM prism_sessions WHERE token_hash=?',await digest(token)).run();return json({ok:true},200,{'Set-Cookie':sessionCookie('',request,0)});}
  if(path.startsWith('files/')&&['GET','HEAD'].includes(method))return await serveFile(request,env,path.slice(6));
  if(!path.startsWith('admin/')||!await authenticated(request,env))problem('관리자 로그인이 필요합니다.',401);
+ const chunkResponse=await handleChunkUpload(request,env,path);if(chunkResponse)return chunkResponse;
  if(path==='admin/editions'&&method==='GET')return json({defaultIssue:(await first(db,"SELECT value FROM prism_settings WHERE key='defaultIssue'")).value,editions:await all(db,'SELECT e.*,v.page_count,v.size,v.filename,p.page_count AS pending_pages,p.filename AS pending_filename FROM prism_editions e LEFT JOIN prism_versions v ON v.id=e.current_version LEFT JOIN prism_versions p ON p.id=e.pending_version WHERE e.deleted_at IS NULL ORDER BY e.year DESC,e.created_at DESC'),trashCount:(await first(db,'SELECT COUNT(*) AS count FROM prism_editions WHERE deleted_at IS NOT NULL')).count});
  if(path==='admin/trash'&&method==='GET')return json({editions:await all(db,'SELECT e.*,v.page_count,v.size,v.filename FROM prism_editions e LEFT JOIN prism_versions v ON v.id=e.current_version WHERE e.deleted_at IS NOT NULL ORDER BY e.deleted_at DESC')});
  const trashAction=/^admin\/editions\/([^/]+)\/(trash|restore)$/.exec(path);
@@ -91,7 +94,7 @@ export async function handleAPI(request,env){try{
  if(path==='admin/uploads'&&method==='POST'){
   const b=await body(request);if(!await first(db,'SELECT id FROM prism_editions WHERE id=? AND deleted_at IS NULL',String(b.editionId)))problem('신문을 먼저 등록해 주세요.');
   if(!Number.isInteger(b.size)||b.size<5||b.size>95*1024*1024||!Number.isInteger(b.pageCount)||b.pageCount<1||b.pageCount>500)problem('PDF는 95MB 이하, 1~500쪽으로 올려 주세요.');
-  const id=crypto.randomUUID(),filename=short(b.filename,'파일 이름',180);await stmt(db,"INSERT INTO prism_versions (id,edition_id,object_key,filename,size,page_count,status,created_at) VALUES (?,?,?,?,?,?,'uploading',?)",id,b.editionId,'newspapers/'+b.editionId+'/'+id+'.pdf',filename,b.size,b.pageCount,now()).run();return json({id,url:'/api/prism/admin/uploads/'+id},201);
+  const id=crypto.randomUUID(),filename=short(b.filename,'파일 이름',180);await stmt(db,"INSERT INTO prism_versions (id,edition_id,object_key,filename,size,page_count,status,created_at) VALUES (?,?,?,?,?,?,'uploading',?)",id,b.editionId,'newspapers/'+b.editionId+'/'+id+'.pdf',filename,b.size,b.pageCount,now()).run();return json({id,url:'/api/prism/admin/uploads/'+id,...(env.PDF_STORAGE?{chunkSize:FILE_CHUNK_BYTES}:{})},201);
  }
  const upload=/^admin\/uploads\/([^/]+)$/.exec(path);
  if(upload&&method==='PUT'){
@@ -117,9 +120,9 @@ export async function handleAPI(request,env){try{
  if(path==='admin/backup'&&method==='GET')return json({schemaVersion:1,exportedAt:now(),origin:u.origin,defaultIssue:(await first(db,"SELECT value FROM prism_settings WHERE key='defaultIssue'")).value,editions:await all(db,'SELECT * FROM prism_editions'),versions:(await all(db,"SELECT id,edition_id,filename,size,page_count,created_at,published_at FROM prism_versions WHERE status='ready'")).map(v=>({...v,url:'/api/prism/files/'+v.id})),publicConfig:await publicConfig(env),audit:await all(db,'SELECT * FROM prism_audit ORDER BY created_at DESC')});
  if(['admin/qr','admin/qr-all'].includes(path)&&method==='GET'){
   const e=await first(db,'SELECT e.*,v.page_count FROM prism_editions e JOIN prism_versions v ON v.id=e.current_version WHERE e.id=? AND e.published=1 AND e.deleted_at IS NULL',u.searchParams.get('issue')||'');if(!e)problem('게시된 신문을 선택해 주세요.');
-  const svg=p=>{const qr=qrCode(0,'M');qr.addData(pageURL(request,e.id,p));qr.make();return qr.createSvgTag({cellSize:8,margin:32,scalable:true});};
+  const svg=p=>{const qr=qrCode(0,'M');qr.addData(pageURL(request,e.id,p,env.READER_URL));qr.make();return qr.createSvgTag({cellSize:8,margin:32,scalable:true});};
   if(path==='admin/qr'){const p=Number(u.searchParams.get('page'));if(!Number.isInteger(p)||p<1||p>e.page_count)problem('쪽수를 확인해 주세요.');return new Response(svg(p),{headers:{'Content-Type':'image/svg+xml','Content-Disposition':`attachment; filename="${e.id}-page-${p}.svg"`,'Cache-Control':'no-store'}});}
-  const files={},lines=['page,url'];for(let p=1;p<=e.page_count;p++){files[`page-${String(p).padStart(3,'0')}.svg`]=strToU8(svg(p));lines.push(p+','+pageURL(request,e.id,p));}files['links.csv']=strToU8('\ufeff'+lines.join('\r\n'));return new Response(zipSync(files),{headers:{'Content-Type':'application/zip','Content-Disposition':`attachment; filename="${e.id}-QR.zip"`,'Cache-Control':'no-store'}});
+  const files={},lines=['page,url'];for(let p=1;p<=e.page_count;p++){files[`page-${String(p).padStart(3,'0')}.svg`]=strToU8(svg(p));lines.push(p+','+pageURL(request,e.id,p,env.READER_URL));}files['links.csv']=strToU8('\ufeff'+lines.join('\r\n'));return new Response(zipSync(files),{headers:{'Content-Type':'application/zip','Content-Disposition':`attachment; filename="${e.id}-QR.zip"`,'Cache-Control':'no-store'}});
  }
  problem('요청한 기능을 찾을 수 없습니다.',404);
  }catch(e){if(!e.status)console.error('PRISM API error',e);return json({error:e.status?e.message:'서버에서 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'},e.status||500);}}

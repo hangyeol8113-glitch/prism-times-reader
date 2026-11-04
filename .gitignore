@@ -6,3 +6,6 @@ dist/
 restore-output/
 *.log
 .DS_Store
+
+pages-output/
+.pnpm-store/

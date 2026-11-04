@@ -1,4 +1,10 @@
-# PRISM-TIMES 독립 운영본
+# PRISM-TIMES 북뷰어와 공용 비밀번호 관리실
+
+**현재 무료 구성은 [OPERATIONS-FREE.md](OPERATIONS-FREE.md)를 따르세요.** GitHub Pages 독자 화면 + Cloudflare Workers 관리 서버 + D1 발행 정보 + Workers KV PDF 저장으로 변경했습니다. R2 결제 등록을 사용하지 않습니다. 아래 R2 최초 배포·복구 절차는 이전 구성의 기록이며 새 KV 서버에 그대로 적용하지 마세요. 최초 PDF는 관리실에서 업로드합니다.
+
+---
+
+## 이전 R2 구성 기록
 
 이 프로젝트는 사용자 또는 학교가 소유한 Cloudflare 계정에 직접 배포합니다. 실행 중에 ChatGPT 구독, OpenAI API, ChatGPT Sites 계정이 필요하지 않습니다. GitHub는 소스 보관과 인수인계에 사용합니다. GitHub Pages만으로 현재 서버 관리실을 실행하는 구성은 아닙니다.
 

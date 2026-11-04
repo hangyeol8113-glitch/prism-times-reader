@@ -5,7 +5,15 @@ const adminCSP="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker
 export default {
  async fetch(request,env){
   const url=new URL(request.url),path=url.pathname;
-  if(path.startsWith('/api/prism/'))return handleAPI(request,env);
+  if(path==='/runtime-config.js')return new Response('window.PRISM_READER_URL='+JSON.stringify(env.READER_URL||'/')+';',{headers:{'Content-Type':'text/javascript','Cache-Control':'no-cache'}});
+  if(path.startsWith('/api/prism/')||path==='/editions.json'){
+   const publicRead=path==='/editions.json'||path.startsWith('/api/prism/files/');
+   if(publicRead&&request.method==='OPTIONS')return new Response(null,{status:204,headers:{'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET, HEAD, OPTIONS','Access-Control-Allow-Headers':'Range','Access-Control-Max-Age':'86400'}});
+   let response=path==='/editions.json'&&request.method==='GET'?await publicConfigResponse(env):await handleAPI(request,env);
+   if(path==='/editions.json'&&response.ok){const data=await response.json();for(const e of data.editions)e.pdf=new URL(e.pdf,url.origin).href;response=new Response(JSON.stringify(data),response);}
+   if(publicRead&&['GET','HEAD'].includes(request.method)){response=new Response(response.body,response);response.headers.set('Access-Control-Allow-Origin','*');response.headers.set('Access-Control-Expose-Headers','Content-Length,Content-Range,Accept-Ranges,ETag');}
+   return response;
+  }
   if(path==='/editions.json'&&request.method==='GET')return publicConfigResponse(env);
   if(path==='/studio.html'||path==='/index.html'){url.pathname=path==='/studio.html'?'/admin':'/';return Response.redirect(url,302);}
   if((path==='/'||path==='/admin'||path==='/admin/')&&['GET','HEAD'].includes(request.method)){

@@ -25,14 +25,18 @@
       "migrations_dir": "migrations"
     }
   ],
-  "r2_buckets": [
-    {
-      "binding": "BUCKET",
-      "bucket_name": "prism-times-papers"
-    }
-  ],
   "observability": {
     "enabled": true
+  },
+  "kv_namespaces": [
+    {
+      "binding": "PDF_STORAGE",
+      "id": "6927ca12dfbb4b2c861a34f26ab3bdb5"
+    }
+  ],
+  "vars": {
+    "READER_URL": "https://hangyeol8113-glitch.github.io/prism-times-reader/",
+    "EMPTY_START": "true"
   },
   "account_id": "4e89d0a1e135c419768a60ac9c511e86"
 }

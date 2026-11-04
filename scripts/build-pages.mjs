@@ -1,0 +1,12 @@
+import {cp,mkdir,readFile,writeFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('..',import.meta.url));
+const backend=new URL(process.env.PRISM_BACKEND_URL||'');
+if(backend.protocol!=='https:')throw Error('PRISM_BACKEND_URL에 배포된 HTTPS 서버 주소를 설정해 주세요.');
+const target=resolve(root,'pages-output');await mkdir(target,{recursive:true});
+for(const name of ['app.js','common.js','reader-core.js','style.css','icon.svg','vendor','fonts','.nojekyll'])await cp(resolve(root,'public',name),resolve(target,name),{recursive:true});
+const html=(await readFile(resolve(root,'reader-template.html'),'utf8')).replace('<head>','<head>\n<script src="site-config.js"></script>').replace('href="/admin"',`href="${backend.origin}/admin"`);
+await writeFile(resolve(target,'index.html'),html);
+await writeFile(resolve(target,'site-config.js'),'window.PRISM_BACKEND_URL='+JSON.stringify(backend.origin)+';\n');
+console.log('Pages reader built. Admin and PDF storage remain on the separate server.');

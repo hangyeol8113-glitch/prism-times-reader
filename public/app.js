@@ -10,7 +10,7 @@ function fail(title,message){$('#loading').hidden=true;$('#error').hidden=false;
 function pdfOptions(extra){return {cMapUrl:new URL('./vendor/cmaps/',import.meta.url).href,cMapPacked:true,standardFontDataUrl:new URL('./vendor/standard_fonts/',import.meta.url).href,...extra};}
 async function boot(){
   try{
-    const response=await fetch(new URL('./editions.json',import.meta.url));if(!response.ok)throw new Error('발행 정보를 불러오지 못했습니다.');state.config=await response.json();
+    const response=await fetch(window.PRISM_BACKEND_URL?new URL('/editions.json',window.PRISM_BACKEND_URL):new URL('./editions.json',import.meta.url));if(!response.ok)throw new Error('발행 정보를 불러오지 못했습니다.');state.config=await response.json();
     const params=new URLSearchParams(location.search);const draftId=params.get('draft');const previewId=params.get('preview');let input;
     if(previewId){const r=await fetch('/api/prism/admin/preview/'+encodeURIComponent(previewId));if(!r.ok){fail('관리자 로그인이 필요합니다','관리실에서 로그인한 후 미리보기를 다시 열어 주세요.');return;}state.issue=await r.json();state.draft=true;state.previewId=previewId;input={url:new URL(state.issue.pdf,location.href).href};}
     else if(draftId){const d=await draftAction('get',draftId);if(!d){fail('이 기기에 미리보기 파일이 없습니다','발행 준비 화면에서 PDF를 먼저 저장해 주세요. 기기 미리보기 링크는 다른 사람과 공유할 수 없습니다.');return;}state.issue={...d,isDemo:false};state.draft=true;input={data:new Uint8Array(d.bytes.slice(0))};}
