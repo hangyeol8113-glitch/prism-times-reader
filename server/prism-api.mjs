@@ -1,3 +1,4 @@
+import {purgeEdition} from './purge.mjs';
 import {kvFiles,handleChunkUpload,FILE_CHUNK_BYTES} from './kv-files.mjs';
 import seed from '../data/seed-editions.json';
 import qrCode from 'qrcode-generator';
@@ -55,8 +56,10 @@ export async function handleAPI(request,env){try{
  if(path.startsWith('files/')&&['GET','HEAD'].includes(method))return await serveFile(request,env,path.slice(6));
  if(!path.startsWith('admin/')||!await authenticated(request,env))problem('관리자 로그인이 필요합니다.',401);
  const chunkResponse=await handleChunkUpload(request,env,path);if(chunkResponse)return chunkResponse;
- if(path==='admin/editions'&&method==='GET')return json({defaultIssue:(await first(db,"SELECT value FROM prism_settings WHERE key='defaultIssue'")).value,editions:await all(db,'SELECT e.*,v.page_count,v.size,v.filename,p.page_count AS pending_pages,p.filename AS pending_filename FROM prism_editions e LEFT JOIN prism_versions v ON v.id=e.current_version LEFT JOIN prism_versions p ON p.id=e.pending_version WHERE e.deleted_at IS NULL ORDER BY e.year DESC,e.created_at DESC'),trashCount:(await first(db,'SELECT COUNT(*) AS count FROM prism_editions WHERE deleted_at IS NOT NULL')).count});
- if(path==='admin/trash'&&method==='GET')return json({editions:await all(db,'SELECT e.*,v.page_count,v.size,v.filename FROM prism_editions e LEFT JOIN prism_versions v ON v.id=e.current_version WHERE e.deleted_at IS NOT NULL ORDER BY e.deleted_at DESC')});
+ if(path==='admin/editions'&&method==='GET')return json({defaultIssue:(await first(db,"SELECT value FROM prism_settings WHERE key='defaultIssue'")).value,editions:await all(db,'SELECT e.*,v.page_count,v.size,v.filename,p.page_count AS pending_pages,p.filename AS pending_filename FROM prism_editions e LEFT JOIN prism_versions v ON v.id=e.current_version LEFT JOIN prism_versions p ON p.id=e.pending_version WHERE e.deleted_at IS NULL ORDER BY e.year DESC,e.created_at DESC'),trashCount:(await first(db,'SELECT COUNT(*) AS count FROM prism_editions WHERE deleted_at IS NOT NULL AND purged_at IS NULL')).count});
+ const purge=/^admin\/editions\/([^/]+)\/purge$/.exec(path);
+ if(purge&&method==='POST'){const b=await body(request);return await purgeEdition(env,purge[1],b.confirmation);}
+ if(path==='admin/trash'&&method==='GET')return json({editions:await all(db,'SELECT e.*,v.page_count,v.size,v.filename FROM prism_editions e LEFT JOIN prism_versions v ON v.id=e.current_version WHERE e.deleted_at IS NOT NULL AND e.purged_at IS NULL ORDER BY e.deleted_at DESC')});
  const trashAction=/^admin\/editions\/([^/]+)\/(trash|restore)$/.exec(path);
  if(trashAction&&method==='POST'){
   const [,id,action]=trashAction,b=await body(request),e=await first(db,'SELECT * FROM prism_editions WHERE id=?',id);if(!e)problem('신문을 찾을 수 없습니다.',404);
@@ -72,9 +75,9 @@ export async function handleAPI(request,env){try{
    ]);
    if(!results[0].results.length)problem('기본 신문을 삭제하려면 대신 열 신문을 선택해 주세요. 목록이 바뀌었다면 새로고침 후 다시 시도해 주세요.',409);
   }else{
-   if(!e.deleted_at)problem('이미 복원된 신문입니다.',409);
+   if(e.purge_started_at||e.purged_at)problem('영구 삭제를 시작한 신문은 복원할 수 없습니다.',409);if(!e.deleted_at)problem('이미 복원된 신문입니다.',409);
    results=await db.batch([
-    stmt(db,'UPDATE prism_editions SET deleted_at=NULL,updated_at=? WHERE id=? AND deleted_at IS NOT NULL RETURNING id',t,id),
+    stmt(db,'UPDATE prism_editions SET deleted_at=NULL,updated_at=? WHERE id=? AND deleted_at IS NOT NULL AND purge_started_at IS NULL AND purged_at IS NULL RETURNING id',t,id),
     stmt(db,"UPDATE prism_settings SET value=? WHERE key='defaultIssue' AND value='' AND EXISTS(SELECT 1 FROM prism_editions WHERE id=? AND published=1 AND deleted_at IS NULL)",id,id),
     stmt(db,'INSERT INTO prism_audit (id,action,edition_id,detail,created_at) SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM prism_editions WHERE id=? AND deleted_at IS NULL AND updated_at=?)',crypto.randomUUID(),'restore',id,e.label+' 복원',t,id,t)
    ]);

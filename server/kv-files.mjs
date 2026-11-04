@@ -63,6 +63,9 @@ export async function handleChunkUpload(request,env,path){
  if(index===0&&!new TextDecoder().decode(bytes.subarray(0,1024)).includes('%PDF-'))return reply({error:'PDF 형식을 확인해 주세요.'},400);
  const claimed=await db.prepare("INSERT INTO prism_upload_parts (version_id,part,size,status) VALUES (?,?,?,'receiving') ON CONFLICT(version_id,part) DO UPDATE SET status='receiving' WHERE prism_upload_parts.status='failed' RETURNING part").bind(id,index,length).first();
  if(!claimed){const old=await db.prepare('SELECT status FROM prism_upload_parts WHERE version_id=? AND part=?').bind(id,index).first();return old?.status==='stored'?reply({ok:true,index}):reply({error:'같은 조각을 저장 중입니다. 잠시 후 다시 시도해 주세요.'},409);}
- try{await env.PDF_STORAGE.put(chunkKey(v.object_key,index),bytes);await db.prepare("UPDATE prism_upload_parts SET status='stored' WHERE version_id=? AND part=?").bind(id,index).run();return reply({ok:true,index});}
+ try{await env.PDF_STORAGE.put(chunkKey(v.object_key,index),bytes);
+  const active=await db.prepare("SELECT v.id FROM prism_versions v JOIN prism_editions e ON e.id=v.edition_id WHERE v.id=? AND v.status='uploading' AND e.deleted_at IS NULL").bind(id).first();
+  if(!active){await env.PDF_STORAGE.delete(chunkKey(v.object_key,index));await db.prepare("UPDATE prism_upload_parts SET status='failed' WHERE version_id=? AND part=?").bind(id,index).run();return reply({error:'신문이 삭제되어 업로드를 중단했습니다.'},409);}
+  await db.prepare("UPDATE prism_upload_parts SET status='stored' WHERE version_id=? AND part=?").bind(id,index).run();return reply({ok:true,index});}
  catch(e){await db.prepare("UPDATE prism_upload_parts SET status='failed' WHERE version_id=? AND part=?").bind(id,index).run();throw e;}
 }

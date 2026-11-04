@@ -33,5 +33,21 @@ try{
  r=await request(api('admin/editions/2026-01/restore'),{method:'POST',data:{}});assert.equal(r.status,200,await r.text());assert.equal((await request(api('files/'+reservation.id),{auth:false})).status,200);
  r=await request(api('admin/qr')+'?issue=2026-01&page=4');assert.equal(r.status,200);assert.match(await r.text(),/<svg/);
  r=await request(api('admin/backup'));assert.equal(r.status,200);assert.equal((await r.json()).versions.find(v=>v.id===reservation.id).size,pdf.length);
- console.log('PASS: full KV Worker API, auth/CSRF, '+pdf.length+' bytes upload/hash/ranges, draft privacy, publish, trash/restore, QR and backup metadata (SQLite/KV test adapters).');
+ const purgePath=api('admin/editions/2026-01/purge');
+ assert.equal((await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제'},auth:false})).status,401);
+ assert.equal((await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제'},csrf:false})).status,403);
+ assert.equal((await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제'}})).status,409);
+ assert.equal((await request(api('admin/editions/2026-01/trash'),{method:'POST',data:{}})).status,200);
+ assert.equal((await request(purgePath,{method:'POST',data:{confirmation:'삭제'}})).status,400);
+ const originalDelete=env.PDF_STORAGE.delete;let deletes=0;env.PDF_STORAGE.delete=async key=>{if(++deletes===3)throw Error('simulated storage failure');return originalDelete(key);};
+ assert.equal((await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제'}})).status,500);
+ assert.equal((await request(api('admin/editions/2026-01/restore'),{method:'POST',data:{}})).status,409);
+ env.PDF_STORAGE.delete=originalDelete;
+ let purgeResult;do{r=await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제'}});assert.equal(r.status,200);purgeResult=await r.json();}while(!purgeResult.done);
+ assert.equal(values.size,0);assert.equal(sql.prepare('SELECT COUNT(*) AS count FROM prism_versions').get().count,0);
+ assert.equal((await (await request(api('admin/trash'))).json()).editions.length,0);
+ assert.equal((await (await request('/editions.json',{auth:false})).json()).removedIssueIds.includes('2026-01'),true);
+ assert.equal((await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제'}})).status,200);
+ assert.equal((await request(api('admin/editions/2026-01/restore'),{method:'POST',data:{}})).status,409);
+ console.log('PASS: full KV Worker API, '+pdf.length+' bytes verified; purge authorization/confirmation, live-edition protection, failure/resume, physical KV deletion, metadata removal, permanent QR tombstone and restore prevention (SQLite/KV test adapters).');
 }finally{sql.close();}
