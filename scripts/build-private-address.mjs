@@ -1,0 +1,10 @@
+import {cp,mkdir,writeFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('..',import.meta.url)),out=resolve(root,'address-output');
+await mkdir(out,{recursive:true});
+for(const file of ['app.js','admin.js','admin.css','common.js','reader-core.js','style.css','icon.svg','vendor','fonts'])await cp(resolve(root,'public',file),resolve(out,file),{recursive:true});
+await cp(resolve(root,'server/pages-proxy.mjs'),resolve(out,'_worker.js'));
+await writeFile(resolve(out,'index.html'),'<!doctype html><title>PRISM-TIMES</title>');
+await writeFile(resolve(out,'_routes.json'),JSON.stringify({version:1,include:['/','/index.html','/admin','/admin/*','/studio.html','/api/*','/editions.json','/runtime-config.js','/handover-source.zip'],exclude:[]}));
+console.log('Pages address gateway built; existing database, PDF storage and password stay on the original Worker.');
