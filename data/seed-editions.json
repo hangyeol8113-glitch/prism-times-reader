@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "publication": "PRISM-TIMES",
+  "defaultIssue": "2026-02-english-sample",
+  "editions": [
+    {
+      "id": "2026-preview",
+      "title": "우리의 시선, 하나의 프리즘",
+      "label": "2026 · 한국어판 시범호",
+      "pdf": "papers/prism-preview.pdf",
+      "isDemo": true,
+      "sections": [
+        "표지",
+        "신문을 여는 가장 짧은 길",
+        "한 권으로 이어지는 이야기",
+        "작은 화면에서도 또렷하게",
+        "목차로 만나는 신문",
+        "우리의 학교",
+        "교실 밖의 목소리",
+        "탐구가 이야기가 될 때",
+        "읽고, 묻고, 나누기",
+        "언어를 건너는 신문",
+        "사진과 문장 사이",
+        "기록으로 남는 한 해",
+        "다음 호를 준비하며",
+        "인쇄 전 마지막 확인",
+        "오래 이어지는 주소",
+        "다음 이야기를 기다리며"
+      ]
+    },
+    {
+      "id": "2026-02-english-sample",
+      "title": "PRISM-TIMES · Issue No. 002",
+      "label": "2026 · 제2호 영문판 예시",
+      "pdf": "papers/2026-02-english-sample.pdf",
+      "isDemo": true,
+      "language": "en",
+      "sampleNotice": "영어판 PDF · 뷰어 연결 예시",
+      "sections": [
+        "표지",
+        null,
+        null,
+        "진로 학술제 스콜레 아카이브"
+      ]
+    }
+  ]
+}

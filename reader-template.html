@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#edece7"><meta name="description" content="PRISM-TIMES 한국어판. QR로 바로 열고, 한 권으로 이어 읽는 학교 신문.">
+  <title>PRISM-TIMES · 한국어판</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css">
+  <script src="vendor/page-flip.browser.js" defer></script><script src="vendor/qrcode.js" defer></script><script type="module" src="app.js"></script>
+</head>
+<body>
+  <svg class="icon-defs" aria-hidden="true"><defs>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m14 5-7 7 7 7"/></symbol><symbol id="i-right" viewBox="0 0 24 24"><path d="m10 5 7 7-7 7"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></symbol>
+    <symbol id="i-zoom" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5M7 10h6m-3-3v6"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 15V3m-4 4 4-4 4 4M5 13v7h14v-7"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6c-3-2-6-2-9-1v14c3-1 6-1 9 1 3-2 6-2 9-1V5c-3-1-6-1-9 1Zm0 0v14"/></symbol>
+  </defs></svg>
+  <header class="masthead">
+    <a class="brand" href="./" aria-label="설정된 기본 신문 열기"><svg viewBox="0 0 30 29" aria-hidden="true"><path d="M15 2 28 26H2Z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m15 2-3 24m3-24 6 24" fill="none" stroke="currentColor" stroke-width=".8"/></svg><span>PRISM<span class="brand-hyphen">—</span>TIMES</span></a>
+    <div class="masthead-right"><span class="language-mark">KOREAN EDITION</span><span class="language-pill">한국어판</span></div>
+  </header>
+  <main class="reader-main">
+    <section class="issue-heading" aria-label="현재 신문">
+      <div><div class="eyebrow" id="issue-label">THE SCHOOL NEWSPAPER</div><h1 id="issue-title">우리의 시선, 하나의 프리즘</h1></div>
+      <span class="demo-tag" id="demo-tag" hidden>예시 16쪽 · 실제 원고 연결 전</span>
+    </section>
+    <section class="reading-room" id="reading-room" aria-label="신문 북뷰어">
+      <div class="room-note"><span class="room-dot"></span><span id="room-note">페이지를 넘기며 이어 읽어 보세요</span></div>
+      <button class="edge-nav edge-prev" id="prev" aria-label="이전 쪽"><svg><use href="#i-left"/></svg></button>
+      <div class="book-slot" id="book-slot"><div id="book"></div></div>
+      <button class="edge-nav edge-next" id="next" aria-label="다음 쪽"><svg><use href="#i-right"/></svg></button>
+      <div class="loading-state" id="loading" role="status"><span class="loader-prism">△</span><span id="load-message">신문을 펼치고 있습니다</span></div>
+      <div class="error-state" id="error" hidden><span class="eyebrow">UNABLE TO OPEN</span><h2 id="error-title">신문을 열 수 없습니다</h2><p id="error-message"></p><a class="primary-button" href="./">기본 신문 열기</a></div>
+    </section>
+    <nav class="reader-toolbar" aria-label="뷰어 도구">
+      <button class="tool-button" id="contents" aria-label="전체 페이지 보기" aria-haspopup="dialog"><svg><use href="#i-grid"/></svg><span>페이지</span></button>
+      <span class="tool-separator"></span>
+      <form class="page-form" id="page-form"><label class="sr-only" for="page-input">이동할 쪽</label><input id="page-input" type="number" inputmode="numeric" min="1" value="1" aria-label="이동할 쪽"><span class="page-total">/ <span id="page-total">16</span></span><button type="submit" class="sr-only">이동</button></form>
+      <span class="tool-separator"></span>
+      <button class="tool-button" id="zoom" aria-label="현재 쪽 확대해서 읽기"><svg><use href="#i-zoom"/></svg><span>확대</span></button>
+      <button class="tool-button spread-tool" id="spread" aria-pressed="false" aria-label="두 쪽 펼침으로 전환"><svg><use href="#i-book"/></svg><span id="spread-text">펼침</span></button>
+      <button class="tool-button fullscreen-tool" id="fullscreen" aria-label="전체 화면"><svg><use href="#i-expand"/></svg><span>전체 화면</span></button>
+      <span class="tool-separator"></span>
+      <button class="tool-button share-tool" id="share" aria-label="현재 쪽 링크와 QR"><svg><use href="#i-share"/></svg><span>링크·QR</span></button>
+    </nav>
+    <div class="reading-hint"><span id="page-caption">표지</span><span>넘겨 읽기 <span class="key-hint">←</span><span class="key-hint">→</span></span></div>
+  </main>
+  <footer class="site-footer"><span>광탄고등학교 영자신문 동아리</span><span>Different perspectives. One prism.</span><a href="/admin">발행 관리실 ↗</a></footer>
+  <dialog id="contents-dialog" class="contents-dialog"><div class="dialog-heading"><div><span class="eyebrow">CONTENTS</span><h2>한눈에 보는 신문</h2></div><button class="icon-button close-dialog" aria-label="페이지 목록 닫기"><svg><use href="#i-close"/></svg></button></div><div id="thumbnail-grid" class="thumbnail-grid"></div></dialog>
+  <dialog id="share-dialog" class="share-dialog"><div class="dialog-heading"><div><span class="eyebrow">CONTINUE FROM HERE</span><h2>이 페이지를 나누세요</h2></div><button class="icon-button close-dialog" aria-label="공유 창 닫기"><svg><use href="#i-close"/></svg></button></div><p class="dialog-copy" id="share-description">이 쪽부터 바로 열리는 링크입니다.</p><div class="qr-preview" id="qr-preview"></div><label class="field-label" for="share-link">현재 쪽 링크</label><div class="link-field"><input id="share-link" readonly><button id="copy-link">복사</button></div><button class="primary-button" id="download-qr">QR 내려받기 <span>SVG</span></button><p class="tiny-note" id="qr-note">인쇄할 때는 QR 주변의 흰 여백을 유지해 주세요.</p></dialog>
+  <dialog id="zoom-dialog" class="zoom-dialog"><div class="zoom-toolbar"><strong id="zoom-title">1쪽 확대 보기</strong><div><button id="zoom-minus" class="text-icon" aria-label="축소">−</button><span id="zoom-percent">100%</span><button id="zoom-plus" class="text-icon" aria-label="확대">+</button><button class="icon-button close-dialog" aria-label="확대 보기 닫기"><svg><use href="#i-close"/></svg></button></div></div><div class="zoom-scroll" id="zoom-scroll"><canvas id="zoom-canvas"></canvas></div></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

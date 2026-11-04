@@ -1,0 +1,1 @@
+ALTER TABLE `prism_editions` ADD `deleted_at` text;
