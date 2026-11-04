@@ -35,7 +35,7 @@
     }
   ],
   "vars": {
-    "READER_URL": "https://hangyeol8113-glitch.github.io/prism-times-reader/",
+    "READER_URL": "https://ptism-times-reader.pages.dev/",
     "EMPTY_START": "true"
   },
   "account_id": "4e89d0a1e135c419768a60ac9c511e86"
