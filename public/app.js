@@ -148,9 +148,27 @@ $$('.close-dialog').forEach(b=>b.onclick=()=>b.closest('dialog').close());
 $$('dialog').forEach(d=>d.addEventListener('click',e=>{if(e.target===d){const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close();}}));
 $('#fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else notify('이 브라우저에서는 전체 화면을 지원하지 않습니다.');}catch{notify('전체 화면을 열 수 없습니다.');}};
 async function renderZoom(){
-  const canvas=$('#zoom-canvas');const pdfPage=await state.pdf.getPage(state.page);const vp=pdfPage.getViewport({scale:1});const viewport=pdfPage.getViewport({scale:Math.min(2500/vp.width,4)});canvas.width=Math.round(viewport.width);canvas.height=Math.round(viewport.height);await pdfPage.render({canvasContext:canvas.getContext('2d'),viewport}).promise;sizeZoom();
+  const canvas=$('#zoom-canvas'),spread=state.spread&&innerWidth>=760;
+  const start=spread?Math.floor((state.page-1)/2)*2+1:state.page;
+  const numbers=spread&&start<state.count?[start,start+1]:[start];
+  $('#zoom-title').textContent=numbers.join('–')+'쪽 확대 보기';
+  canvas.setAttribute('aria-label',numbers.join('–')+'쪽 신문 확대');
+  canvas.dataset.pages=String(numbers.length);
+  const pages=[];for(const number of numbers){const pdfPage=await state.pdf.getPage(number);pages.push({pdfPage,base:pdfPage.getViewport({scale:1})});}
+  const height=Math.min(...pages.map(({base})=>base.height*Math.min(2500/base.width,4)));
+  const views=pages.map(({pdfPage,base})=>({pdfPage,viewport:pdfPage.getViewport({scale:height/base.height})}));
+  canvas.width=views.reduce((sum,{viewport})=>sum+Math.round(viewport.width),0);canvas.height=Math.round(height);
+  const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);sizeZoom();
+  let offset=0;
+  for(const {pdfPage,viewport} of views){
+    // PDF.js clears its target canvas before drawing. Render each page separately
+    // so drawing the right page cannot erase the already rendered left page.
+    const paper=document.createElement('canvas');paper.width=Math.round(viewport.width);paper.height=Math.round(viewport.height);
+    await pdfPage.render({canvasContext:paper.getContext('2d'),viewport}).promise;
+    context.drawImage(paper,offset,0);offset+=paper.width;paper.width=paper.height=0;
+  }
 }
-function sizeZoom(){const w=Math.min($('#zoom-scroll').clientWidth-30,900)*state.zoom;$('#zoom-canvas').style.width=w+'px';$('#zoom-canvas').style.height='auto';$('#zoom-percent').textContent=Math.round(state.zoom*100)+'%';$('#zoom-minus').disabled=state.zoom<=1;$('#zoom-plus').disabled=state.zoom>=3;}
-$('#zoom').onclick=async()=>{if(!state.pdf)return;state.zoom=1;$('#zoom-title').textContent=state.page+'쪽 확대 보기';$('#zoom-dialog').showModal();$('#zoom-scroll').scrollTo(0,0);await renderZoom();};
+function sizeZoom(){const scroll=$('#zoom-scroll'),canvas=$('#zoom-canvas'),padding=getComputedStyle(scroll),available=scroll.clientWidth-parseFloat(padding.paddingLeft)-parseFloat(padding.paddingRight);const w=Math.min(available,canvas.dataset.pages==='2'?1800:900)*state.zoom;canvas.style.width=w+'px';canvas.style.height='auto';$('#zoom-percent').textContent=Math.round(state.zoom*100)+'%';$('#zoom-minus').disabled=state.zoom<=1;$('#zoom-plus').disabled=state.zoom>=3;}
+$('#zoom').onclick=async()=>{if(!state.pdf)return;state.zoom=1;$('#zoom-dialog').showModal();$('#zoom-scroll').scrollTo(0,0);try{await renderZoom();}catch(error){console.error(error);notify('확대 화면을 불러오지 못했습니다. 다시 시도해 주세요.');}};
 $('#zoom-minus').onclick=()=>{state.zoom=Math.max(1,state.zoom-.25);sizeZoom();};$('#zoom-plus').onclick=()=>{state.zoom=Math.min(3,state.zoom+.25);sizeZoom();};
 await boot();

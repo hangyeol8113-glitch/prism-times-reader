@@ -9,6 +9,7 @@ dialog{color:var(--ink);border:1px solid #dadfd2;background:#f8f9f3;border-radiu
 .file-download-dialog{width:380px;max-width:calc(100vw - 30px);padding:25px}.file-download-dialog h2{font-size:20px;font-weight:500;margin:0 0 15px}.file-download-dialog>p{color:#7c8972;font-size:12px;overflow-wrap:anywhere;line-height:1.7}.file-download-dialog .primary-button{margin-top:22px}.file-download-dialog .tiny-note{font-size:10px}.file-dialog-close{border:0;background:none;color:#7d8a73;font-size:11px;padding:8px 0;margin-top:8px}
 .page img{width:100%;height:100%;object-fit:contain;display:block;user-select:none;-webkit-user-drag:none}
 .book-slot[data-turn-state=preparing],.book-slot[data-turn-state=flipping]{pointer-events:none}
+.zoom-scroll canvas{display:block;margin:0 auto}
 
 /* Give two-page reading the viewport space previously used by the masthead and margins. */
 @media(min-width:760px){
