@@ -21,7 +21,7 @@
     {
       "binding": "DB",
       "database_name": "prism-times-db",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "database_id": "ee215810-6153-4463-b8c9-e5ed57b7bd97",
       "migrations_dir": "migrations"
     }
   ],
@@ -33,5 +33,6 @@
   ],
   "observability": {
     "enabled": true
-  }
+  },
+  "account_id": "4e89d0a1e135c419768a60ac9c511e86"
 }
