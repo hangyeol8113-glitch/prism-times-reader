@@ -25,13 +25,17 @@
       "migrations_dir": "migrations"
     }
   ],
-  "r2_buckets": [
-    {
-      "binding": "BUCKET",
-      "bucket_name": "prism-times-papers"
-    }
-  ],
   "observability": {
     "enabled": true
+  },
+  "kv_namespaces": [
+    {
+      "binding": "PDF_STORAGE",
+      "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+    }
+  ],
+  "vars": {
+    "EMPTY_START": "true",
+    "READER_URL": "https://YOUR_USERNAME.github.io/YOUR_REPOSITORY/"
   }
 }
