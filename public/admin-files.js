@@ -27,9 +27,9 @@ export function installFiles({$,api,busy,notify,pdfjs,size,date,esc,saveBlob}){
  document.addEventListener('click',e=>{const link=e.target.closest('a[href]');if(!link)return;const u=new URL(link.href,location.href),version=u.searchParams.get('preview');if(u.origin!==location.origin||!version)return;e.preventDefault();openPreview({version,title:link.closest('.edition-card')?.querySelector('h3')?.textContent||'저장된 PDF 미리보기'});});
  function selection(){const count=$('#paper-files').querySelectorAll('input:checked').length;$('#papers-selected').disabled=downloading||!count;$('#papers-selected').textContent='선택한 파일 다운로드'+(count?' · '+count+'개':'');}
  async function loadPapers(){
-  const list=$('#paper-files');list.textContent='PDF 목록을 불러오고 있습니다…';manifest=await api('admin/backup');
+  const list=$('#paper-files');list.textContent='PDF 목록을 불러오고 있습니다…';manifest=await api('admin/papers');
   list.innerHTML=manifest.versions.map(v=>{const e=manifest.editions.find(e=>e.id===v.edition_id);const state=e?.deleted_at?'휴지통':e?.current_version===v.id?'현재 게시본':e?.pending_version===v.id?'게시 대기':'이전 수정본';return `<label class="paper-file"><input type="checkbox" value="${esc(v.id)}"><span><strong>${esc(v.filename)}</strong><small>${esc(e?.label||v.edition_id)} · ${state} · ${v.page_count}쪽 · ${size(v.size)} · ${date(v.created_at)}</small></span><button class="secondary" type="button" data-paper-download="${esc(v.id)}">PDF 다운로드</button></label>`;}).join('')||'<p class="muted">저장된 PDF 파일이 없습니다.</p>';
-  $('#papers-all').disabled=downloading||!manifest.versions.length;selection();$('#paper-download-status').textContent=manifest.versions.length+'개 PDF · 수정본과 휴지통 파일 포함';
+  $('#papers-all').disabled=downloading||!manifest.versions.length;selection();$('#paper-download-status').textContent=manifest.versions.length+'개 PDF · 휴지통 파일 제외';
  }
  function safeName(name){return String(name).replace(/[\\/:*?"<>|\x00-\x1f]/g,'_').replace(/^\.+/,'_')||'신문.pdf';}
  async function downloadPapers(ids,all=false){

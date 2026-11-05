@@ -28,6 +28,7 @@ export async function purgeEdition(env,id,confirmation,expectedCreatedAt){
  await db.prepare('UPDATE prism_purge_jobs SET cursor=MAX(cursor,?) WHERE edition_id=? AND '+guard).bind(end,id,...generation).run();
  if(end<parts.length)return answer({ok:true,done:false,processed:end,total:parts.length});
  await db.batch([
+  db.prepare('DELETE FROM prism_version_trash WHERE version_id IN (SELECT id FROM prism_versions WHERE edition_id=?) AND '+guard).bind(id,...generation),
   db.prepare('DELETE FROM prism_upload_parts WHERE version_id IN (SELECT id FROM prism_versions WHERE edition_id=?) AND '+guard).bind(id,...generation),
   db.prepare('DELETE FROM prism_versions WHERE edition_id=? AND '+guard).bind(id,...generation),
   db.prepare("INSERT OR IGNORE INTO prism_audit (id,action,edition_id,detail,created_at) SELECT ?,?,?,?,? WHERE "+guard).bind('purge-'+id+'-'+lock.created_at+'-'+lock.purge_started_at,'purge',id,edition.label+' · PDF·수정본·신문 등록 정보 영구 삭제',time,...generation),

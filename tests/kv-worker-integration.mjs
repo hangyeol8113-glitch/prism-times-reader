@@ -33,6 +33,58 @@ try{
  r=await request(api('admin/editions/2026-01/restore'),{method:'POST',data:{}});assert.equal(r.status,200,await r.text());assert.equal((await request(api('files/'+reservation.id),{auth:false})).status,200);
  r=await request(api('admin/qr')+'?issue=2026-01&page=4');assert.equal(r.status,200);assert.match(await r.text(),/<svg/);
  r=await request(api('admin/backup'));assert.equal(r.status,200);assert.equal((await r.json()).versions.find(v=>v.id===reservation.id).size,pdf.length);
+ // Revision replacement keeps printed issue/page QR URLs and archives the old PDF.
+ async function revision(filename){
+  const r=await request(api('admin/uploads'),{method:'POST',data:{editionId:edition.id,filename,size:pdf.length,pageCount:16}});assert.equal(r.status,201);const v=await r.json();
+  for(let i=0;i<Math.ceil(pdf.length/v.chunkSize);i++)assert.equal((await request(v.url+'/chunks/'+i,{method:'PUT',bytes:pdf.slice(i*v.chunkSize,(i+1)*v.chunkSize)})).status,200);
+  assert.equal((await request(v.url+'/complete',{method:'POST',data:{}})).status,200);return v;
+ }
+ const publish=v=>request(api('admin/publish'),{method:'POST',data:{editionId:edition.id,versionId:v.id,makeDefault:false}});
+ const papers=async()=>await (await request(api('admin/papers'))).json();
+ const trash=async()=>await (await request(api('admin/trash'))).json();
+ const qrBefore=await (await request(api('admin/qr')+'?issue=2026-01&page=4')).text();
+ const v2=await revision('수정본2.pdf');
+ assert.equal((await request(api('files/'+reservation.id),{auth:false})).status,200);assert.equal((await trash()).versions.length,0);
+ assert.equal((await publish(v2)).status,200);
+ assert.equal((await request(api('files/'+reservation.id),{auth:false})).status,410);
+ assert.equal((await request(api('files/'+reservation.id))).status,200);
+ assert.equal((await papers()).versions.some(v=>v.id===reservation.id),false);
+ assert.equal((await papers()).versions.some(v=>v.id===v2.id),true);
+ assert.equal((await trash()).versions.some(v=>v.id===reservation.id),true);
+ assert.equal((await (await request(api('admin/backup'))).json()).versions.some(v=>v.id===reservation.id&&v.trashed_at),true);
+ assert.equal(await (await request(api('admin/qr')+'?issue=2026-01&page=4')).text(),qrBefore);
+ const after=await (await request('/editions.json',{auth:false})).json();assert.equal(after.defaultIssue,config.defaultIssue);assert.equal(after.editions[0].id,edition.id);assert.equal(after.editions[0].pageCount,16);assert.match(after.editions[0].pdf,new RegExp(v2.id));
+ const v3=await revision('수정본3.pdf');assert.equal((await request(api('files/'+v2.id),{auth:false})).status,200);
+ assert.equal((await publish(v3)).status,200);assert.equal((await trash()).versions.length,2);
+ assert.equal((await publish(reservation)).status,400);
+ const restore=v=>request(api('admin/versions/'+v.id+'/restore'),{method:'POST',data:{}});
+ assert.equal((await restore(reservation)).status,200);assert.equal((await request(api('files/'+reservation.id),{auth:false})).status,401);
+ assert.equal((await request(api('files/'+v3.id),{auth:false})).status,200);
+ const fresh={...env,DB:{...db}};await worker.fetch(new Request(origin+'/editions.json'),fresh);
+ assert.equal((await trash()).versions.some(v=>v.id===reservation.id),false); // Restore survives a cold start.
+ assert.equal((await publish(reservation)).status,200);assert.equal((await request(api('files/'+reservation.id),{auth:false})).status,200);
+ assert.equal((await restore(v3)).status,200);assert.equal((await publish(v3)).status,200);
+ const purgeRevision=api('admin/versions/'+reservation.id+'/purge');
+ assert.equal((await request(purgeRevision,{method:'POST',data:{confirmation:'영구 삭제'},auth:false})).status,401);
+ assert.equal((await request(purgeRevision,{method:'POST',data:{confirmation:'영구 삭제'},csrf:false})).status,403);
+ assert.equal((await request(purgeRevision,{method:'POST',data:{confirmation:'삭제'}})).status,400);
+ const remove=env.PDF_STORAGE.delete;let attempts=0;env.PDF_STORAGE.delete=async k=>{if(++attempts===2)throw Error('simulated revision purge failure');return remove(k);};
+ assert.equal((await request(purgeRevision,{method:'POST',data:{confirmation:'영구 삭제'}})).status,500);
+ assert.equal((await restore(reservation)).status,409);assert.equal((await request(api('files/'+reservation.id))).status,410);
+ env.PDF_STORAGE.delete=remove;let progress;do{r=await request(purgeRevision,{method:'POST',data:{confirmation:'영구 삭제'}});assert.equal(r.status,200);progress=await r.json();}while(!progress.done);
+ assert.equal(sql.prepare('SELECT id FROM prism_versions WHERE id=?').get(reservation.id),undefined);
+ assert.equal((await request(api('files/'+v3.id),{auth:false})).status,200);
+ assert.equal((await request(api('admin/versions/'+v3.id+'/purge'),{method:'POST',data:{confirmation:'영구 삭제'}})).status,404);
+ assert.equal(await (await request(api('admin/qr')+'?issue=2026-01&page=4')).text(),qrBefore);
+ // Backfill earlier replaced publications without touching the current edition.
+ sql.prepare('DELETE FROM prism_version_trash WHERE version_id=?').run(v2.id);
+ await worker.fetch(new Request(origin+'/editions.json'),{...env,DB:{...db}});
+ assert.equal((await trash()).versions.some(v=>v.id===v2.id),true);
+ assert.equal((await request(api('admin/editions/2026-01/trash'),{method:'POST',data:{}})).status,200);
+ assert.equal((await papers()).versions.length,0);assert.equal((await trash()).versions.length,0);
+ assert.equal((await request(api('admin/editions/2026-01/restore'),{method:'POST',data:{}})).status,200);
+ assert.equal((await papers()).versions.length,1);
+ console.log('PASS: replacement archives old PDFs only after publication; QR/page URLs unchanged; trash excluded from PDF downloads; restore and retryable purge protect the current PDF; legacy revisions backfilled.');
  const purgePath=api('admin/editions/2026-01/purge');
  assert.equal((await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제'},auth:false})).status,401);
  assert.equal((await request(purgePath,{method:'POST',data:{confirmation:'영구 삭제'},csrf:false})).status,403);
